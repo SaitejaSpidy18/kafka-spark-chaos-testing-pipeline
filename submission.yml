@@ -1,0 +1,36 @@
+version: "1.0"
+
+# Commands to prepare the environment (build images, pull deps, etc.)
+setup:
+  - docker compose pull || true
+  - docker compose build
+  # Start core infra first (Kafka, Zookeeper, DB, Spark, etc.)
+  - docker compose up -d zookeeper kafka-1 kafka-2 kafka-3 postgres spark producer
+
+# Commands to ensure the streaming pipeline is running
+start_pipeline:
+  # In many setups, the services above already start the pipeline.
+  # Keep this block idempotent so it is safe to call multiple times.
+  - docker compose up -d producer
+  - docker compose up -d spark
+  # Optional: wait a bit to let the pipeline warm up
+  - sleep 30
+
+# Commands to run chaos tests for a predefined duration
+run_chaos:
+  # Example: bash-based chaos script
+  - bash chaos/chaos.sh --duration 600 --interval 30
+  # OR, if using Python instead (comment one of these out in your repo)
+  # - python chaos/chaos.py --duration 600 --interval 30
+
+# Commands to execute the final validation and assert zero data loss
+validate:
+  # Example: Python validation script
+  - python validation/validate_data.py \
+      --config config/validation.yml
+  # Or, if you run it in a container:
+  # - docker compose run --rm validation
+
+# Optional: teardown commands if the evaluator chooses to run them
+teardown:
+  - docker compose down -v
